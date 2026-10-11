@@ -18,6 +18,9 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.alabypedro.mediatools.R
 import com.alabypedro.mediatools.UmtApp
+import com.alabypedro.mediatools.convert.ConvStatus
+import com.alabypedro.mediatools.convert.ConverterState
+import com.alabypedro.mediatools.convert.Formats
 import com.alabypedro.mediatools.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,9 +28,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-/** Mantém o processo vivo (e a CPU acordada) enquanto houver downloads ativos. */
+/** Mantém o processo vivo (e a CPU acordada) enquanto houver downloads ou conversões ativos. */
 class DownloadService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var watcher: Job? = null
@@ -46,17 +50,20 @@ class DownloadService : Service() {
                 .apply { acquire(6 * 60 * 60 * 1000L) }
         }
         if (watcher == null) {
-            val repo = (application as UmtApp).downloads
+            val app = application as UmtApp
             watcher = scope.launch {
-                repo.jobs.collectLatest { jobs ->
-                    val active = jobs.filter { it.isActive }
-                    if (active.isEmpty()) {
-                        ServiceCompat.stopForeground(this@DownloadService, ServiceCompat.STOP_FOREGROUND_REMOVE)
-                        stopSelf()
-                    } else {
-                        Notifications.notify(this@DownloadService, Notifications.PROGRESS_ID, Notifications.progress(this@DownloadService, active))
+                combine(app.downloads.jobs, app.converter.state) { jobs, conv -> jobs.filter { it.isActive } to conv }
+                    .collectLatest { (active, conv) ->
+                        val ctx = this@DownloadService
+                        when {
+                            active.isNotEmpty() -> Notifications.notify(ctx, Notifications.PROGRESS_ID, Notifications.progress(ctx, active))
+                            conv.running -> Notifications.notify(ctx, Notifications.PROGRESS_ID, Notifications.conversion(ctx, conv))
+                            else -> {
+                                ServiceCompat.stopForeground(ctx, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                                stopSelf()
+                            }
+                        }
                     }
-                }
             }
         }
         return START_NOT_STICKY
@@ -112,6 +119,37 @@ object Notifications {
         return b.build()
     }
 
+    fun conversion(context: Context, state: ConverterState): Notification {
+        val current = state.entries.firstOrNull { it.status == ConvStatus.RUNNING }
+        val total = state.entries.count { it.status != ConvStatus.WAITING || it.target != null }
+        val doneCount = state.entries.count { it.status in setOf(ConvStatus.DONE, ConvStatus.FAILED, ConvStatus.SKIPPED, ConvStatus.CANCELED) }
+        val b = NotificationCompat.Builder(context, CH_PROGRESS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(current?.let { "Convertendo ${it.name}" } ?: "Convertendo")
+            .setContentText("${minOf(doneCount + 1, total)} de $total" + current?.target?.let { " → ${Formats.targetLabel(it)}" }.orEmpty())
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openApp(context, MainActivity.TAB_CONVERT))
+        if (current != null && current.progress >= 0) b.setProgress(1000, (current.progress * 1000).toInt(), false)
+        else b.setProgress(0, 0, true)
+        return b.build()
+    }
+
+    fun conversionsFinished(context: Context, done: Int, failed: Int) {
+        val title = when {
+            failed == 0 -> if (done == 1) "Conversão concluída" else "$done conversões concluídas"
+            done == 0 -> if (failed == 1) "A conversão falhou" else "$failed conversões falharam"
+            else -> "$done concluídas, $failed com erro"
+        }
+        notify(context, 2, NotificationCompat.Builder(context, CH_RESULT)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText("Toque para ver a fila do conversor")
+            .setContentIntent(openApp(context, MainActivity.TAB_CONVERT))
+            .setAutoCancel(true)
+            .build())
+    }
+
     fun finished(context: Context, job: DownloadJob) {
         val file = job.files.singleOrNull()
         val intent = if (file != null) {
@@ -151,9 +189,9 @@ object Notifications {
         if (nm.areNotificationsEnabled()) runCatching { nm.notify(id, notification) }
     }
 
-    private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
-        context, 0,
-        Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_TAB, MainActivity.TAB_DOWNLOADS)
+    private fun openApp(context: Context, tab: Int = MainActivity.TAB_DOWNLOADS): PendingIntent = PendingIntent.getActivity(
+        context, tab,
+        Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_TAB, tab)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )

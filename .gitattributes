@@ -2,3 +2,12 @@ gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
 *.png binary
+app/src/androidTest/assets/samples/** binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.gif binary
+*.jpg binary
+*.mp4 binary
+*.gz binary
+*.apk binary

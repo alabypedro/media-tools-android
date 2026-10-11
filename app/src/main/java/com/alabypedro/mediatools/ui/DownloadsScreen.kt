@@ -8,6 +8,8 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,7 +42,7 @@ import com.alabypedro.mediatools.download.MediaStoreSaver
 import com.alabypedro.mediatools.download.SavedFile
 
 @Composable
-fun DownloadsScreen(repo: DownloadRepository) {
+fun DownloadsScreen(repo: DownloadRepository, onConvert: (List<SavedFile>) -> Unit) {
     val jobs by repo.jobs.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -74,13 +76,15 @@ fun DownloadsScreen(repo: DownloadRepository) {
                 onCancel = { repo.cancel(job.id) },
                 onRetry = { repo.retry(job.id) },
                 onRemove = { repo.remove(job.id) },
-                onOpen = { open(context, it) },
-                onShare = { share(context, job.files) },
+                onOpen = { openFile(context, it) },
+                onShare = { shareFiles(context, job.files) },
+                onConvert = { onConvert(job.files) },
             )
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun JobCard(
     job: DownloadJob,
@@ -89,6 +93,7 @@ private fun JobCard(
     onRemove: () -> Unit,
     onOpen: (SavedFile) -> Unit,
     onShare: () -> Unit,
+    onConvert: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -127,11 +132,12 @@ private fun JobCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 when (job.status) {
                     JobStatus.QUEUED, JobStatus.RUNNING -> TextButton(onClick = onCancel) { Text("Cancelar") }
                     JobStatus.DONE -> {
                         TextButton(onClick = onRemove) { Text("Remover") }
+                        TextButton(onClick = onConvert) { Text("Converter") }
                         TextButton(onClick = onShare) { Text("Compartilhar") }
                         TextButton(onClick = { onOpen(job.files.first()) }) {
                             Text(if (job.files.size == 1) "Abrir" else "Abrir primeiro")
@@ -147,7 +153,7 @@ private fun JobCard(
     }
 }
 
-private fun open(context: Context, file: SavedFile) {
+internal fun openFile(context: Context, file: SavedFile) {
     val intent = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(file.uri), file.mime)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     try {
@@ -160,7 +166,7 @@ private fun open(context: Context, file: SavedFile) {
     }
 }
 
-private fun share(context: Context, files: List<SavedFile>) {
+internal fun shareFiles(context: Context, files: List<SavedFile>) {
     if (files.isEmpty()) return
     val uris = ArrayList(files.map { Uri.parse(it.uri) })
     val intent = if (uris.size == 1) {

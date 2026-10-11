@@ -1,0 +1,2 @@
+Texto em Windows-1252: ação, café.
+Segunda linha.

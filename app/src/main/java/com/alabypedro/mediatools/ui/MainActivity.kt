@@ -3,7 +3,9 @@ package com.alabypedro.mediatools.ui
 import android.Manifest
 import android.content.Intent
 import android.os.Build
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -27,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.core.content.IntentCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alabypedro.mediatools.R
 import com.alabypedro.mediatools.UmtApp
@@ -59,6 +62,7 @@ class MainActivity : ComponentActivity() {
                         TopAppBar(title = {
                             Text(when (current) {
                                 TAB_DOWNLOADS -> "Downloads"
+                                TAB_CONVERT -> "Converter"
                                 TAB_SETTINGS -> "Ajustes"
                                 else -> "Universal Media Tools"
                             })
@@ -83,6 +87,12 @@ class MainActivity : ComponentActivity() {
                                 label = { Text("Downloads") },
                             )
                             NavigationBarItem(
+                                selected = current == TAB_CONVERT,
+                                onClick = { tab.intValue = TAB_CONVERT },
+                                icon = { Icon(painterResource(R.drawable.ic_convert), contentDescription = null) },
+                                label = { Text("Converter") },
+                            )
+                            NavigationBarItem(
                                 selected = current == TAB_SETTINGS,
                                 onClick = { tab.intValue = TAB_SETTINGS },
                                 icon = { Icon(Icons.Default.Settings, contentDescription = null) },
@@ -93,7 +103,11 @@ class MainActivity : ComponentActivity() {
                 ) { padding ->
                     Box(Modifier.padding(padding)) {
                         when (current) {
-                            TAB_DOWNLOADS -> DownloadsScreen(app.downloads)
+                            TAB_DOWNLOADS -> DownloadsScreen(app.downloads) { files ->
+                                app.converter.addUris(files.map { Uri.parse(it.uri) })
+                                tab.intValue = TAB_CONVERT
+                            }
+                            TAB_CONVERT -> ConvertScreen(app.converter)
                             TAB_SETTINGS -> SettingsScreen(app)
                             else -> HomeScreen(home, app.updater, onQueued = { tab.intValue = TAB_DOWNLOADS })
                         }
@@ -109,10 +123,18 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
-    /** "Compartilhar → Universal Media Tools" de outro app, ou toque numa notificação. */
+    /**
+     * "Compartilhar → Universal Media Tools" de outro app: arquivos vão para o
+     * Converter, links para o Início. Ou toque numa notificação.
+     */
     private fun handleIntent(intent: Intent?) {
         intent ?: return
-        if (intent.action == Intent.ACTION_SEND) {
+        val streams = sharedStreams(intent)
+        if (streams.isNotEmpty()) {
+            val rejected = (application as UmtApp).converter.addUris(streams)
+            if (rejected.isNotEmpty()) Toast.makeText(this, rejected.joinToString("\n"), Toast.LENGTH_LONG).show()
+            tab.intValue = TAB_CONVERT
+        } else if (intent.action == Intent.ACTION_SEND) {
             val url = extractUrl(intent.getStringExtra(Intent.EXTRA_TEXT))
             if (url != null) {
                 tab.intValue = TAB_HOME
@@ -122,10 +144,17 @@ class MainActivity : ComponentActivity() {
         if (intent.hasExtra(EXTRA_TAB)) tab.intValue = intent.getIntExtra(EXTRA_TAB, TAB_HOME)
     }
 
+    private fun sharedStreams(intent: Intent): List<Uri> = when (intent.action) {
+        Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
+        Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+        else -> emptyList()
+    }
+
     companion object {
         const val EXTRA_TAB = "tab"
         const val TAB_HOME = 0
         const val TAB_DOWNLOADS = 1
-        const val TAB_SETTINGS = 2
+        const val TAB_CONVERT = 2
+        const val TAB_SETTINGS = 3
     }
 }

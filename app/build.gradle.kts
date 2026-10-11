@@ -23,6 +23,7 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "0.2.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Repositório onde o release.py publica as versões e o app procura atualizações
         buildConfigField("String", "UPDATE_REPO", "\"alabypedro/media-tools-android\"")
@@ -94,7 +95,20 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // Conversor
+    implementation("androidx.documentfile:documentfile:1.0.1")       // "Adicionar pasta" e "Salvar em"
+    implementation("androidx.exifinterface:exifinterface:1.3.7")     // manter EXIF nas imagens
+    implementation("androidx.heifwriter:heifwriter:1.0.0")           // gravar HEIC
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")          // PDF achatado e PDF → texto
+    implementation("org.commonmark:commonmark:0.24.0")               // Markdown → PDF/documentos
+    implementation("org.apache.commons:commons-compress:1.27.1")     // 7z, tar, bz2, xz
+    implementation("org.tukaani:xz:1.10")
+
     testImplementation("junit:junit:4.13.2")
     // android.jar só traz stubs do org.json: os testes JVM precisam da implementação real
     testImplementation("org.json:json:20240303")
+
+    // testes no aparelho/emulador: passam cada amostra por todos os conversores (gradlew connectedDebugAndroidTest)
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

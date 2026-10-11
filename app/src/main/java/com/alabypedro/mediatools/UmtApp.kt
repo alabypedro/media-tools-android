@@ -1,6 +1,7 @@
 package com.alabypedro.mediatools
 
 import android.app.Application
+import com.alabypedro.mediatools.convert.ConvertRepository
 import com.alabypedro.mediatools.data.Settings
 import com.alabypedro.mediatools.download.DownloadRepository
 import com.alabypedro.mediatools.download.Notifications
@@ -17,6 +18,7 @@ class UmtApp : Application() {
     lateinit var engine: Engine private set
     lateinit var downloads: DownloadRepository private set
     lateinit var updater: AppUpdater private set
+    lateinit var converter: ConvertRepository private set
 
     override fun onCreate() {
         super.onCreate()
@@ -24,6 +26,7 @@ class UmtApp : Application() {
         engine = Engine(this)
         downloads = DownloadRepository(this, engine, settings)
         updater = AppUpdater(this)
+        converter = ConvertRepository(this, engine)
         Notifications.createChannels(this)
         if (settings.value.checkAppUpdates) appScope.launch { updater.check() }
         appScope.launch {
