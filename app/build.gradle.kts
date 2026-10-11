@@ -107,7 +107,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // android.jar só traz stubs do org.json: os testes JVM precisam da implementação real
     testImplementation("org.json:json:20240303")
-
+ 
     // testes no aparelho/emulador: passam cada amostra por todos os conversores (gradlew connectedDebugAndroidTest)
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
