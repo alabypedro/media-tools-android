@@ -14,6 +14,8 @@ data class AppSettings(
     val maxConcurrent: Int = 2,
     val autoUpdateYtDlp: Boolean = true,
     val lastUpdateCheck: Long = 0,
+    /** Procurar versão nova do app ao abrir (GitHub Releases). */
+    val checkAppUpdates: Boolean = true,
 )
 
 class Settings(context: Context) {
@@ -36,6 +38,7 @@ class Settings(context: Context) {
             putInt("maxConcurrent", next.maxConcurrent)
             putBoolean("autoUpdateYtDlp", next.autoUpdateYtDlp)
             putLong("lastUpdateCheck", next.lastUpdateCheck)
+            putBoolean("checkAppUpdates", next.checkAppUpdates)
         }
     }
 
@@ -53,6 +56,7 @@ class Settings(context: Context) {
             maxConcurrent = prefs.getInt("maxConcurrent", 2),
             autoUpdateYtDlp = prefs.getBoolean("autoUpdateYtDlp", true),
             lastUpdateCheck = prefs.getLong("lastUpdateCheck", 0),
+            checkAppUpdates = prefs.getBoolean("checkAppUpdates", true),
         )
     }
 }

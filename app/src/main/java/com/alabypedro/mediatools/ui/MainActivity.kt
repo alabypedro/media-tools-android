@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
                         when (current) {
                             TAB_DOWNLOADS -> DownloadsScreen(app.downloads)
                             TAB_SETTINGS -> SettingsScreen(app)
-                            else -> HomeScreen(home, onQueued = { tab.intValue = TAB_DOWNLOADS })
+                            else -> HomeScreen(home, app.updater, onQueued = { tab.intValue = TAB_DOWNLOADS })
                         }
                     }
                 }

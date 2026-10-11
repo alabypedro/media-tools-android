@@ -35,8 +35,10 @@ Requer **Android 10 ou mais novo**.
 
 ## Instalar no celular
 
-1. Copie `app-arm64-v8a-release.apk` para o celular (cabo USB, Google Drive, Telegram...).
-   Quase todo celular atual é arm64; `armeabi-v7a` é só para aparelhos bem antigos de 32 bits.
+1. No celular, abra a [última versão](https://github.com/alabypedro/media-tools-android/releases/latest)
+   e baixe `UniversalMediaTools-<versão>-arm64-v8a.apk`. Quase todo celular atual é arm64;
+   `armeabi-v7a` é só para aparelhos bem antigos de 32 bits. Depois disso, as próximas versões
+   chegam pelo próprio app.
 2. Abra o arquivo no celular. O Android vai pedir para **permitir instalar apps desta fonte**
    (o app que abriu o APK: Arquivos, Drive, Chrome...). Permita e instale.
 3. O Play Protect pode avisar que o app é desconhecido (não está na Play Store): "Instalar mesmo assim".
@@ -61,6 +63,27 @@ Pré-requisitos (já instalados nesta máquina):
 
 Sai um APK por arquitetura (`arm64-v8a`, `armeabi-v7a`, `x86_64`), cada um com ~70-80 MB
 (Python + FFmpeg embutidos). O `x86_64` serve para o emulador.
+
+### Publicar uma versão nova
+
+Um comando só, igual ao app desktop:
+
+```bash
+python release.py "O que mudou"            # 0.2.0 -> 0.2.1 (correção)
+python release.py --minor "O que mudou"    # 0.2.0 -> 0.3.0 (recurso novo)
+python release.py --major "O que mudou"    # -> 1.0.0
+python release.py --version 0.4.2 "..."    # versão exata
+```
+
+Ele sobe `versionName`/`versionCode` em `app/build.gradle.kts`, roda os testes, gera os APKs
+assinados, copia para `dist/` como `UniversalMediaTools-<versão>-<abi>.apk` (com `.sha256`),
+faz commit e push e publica em [Releases](https://github.com/alabypedro/media-tools-android/releases).
+Se algo falhar antes do commit, a versão volta ao que era. `--skip-tests` e `--no-git` existem.
+
+No celular, o app procura versão nova **ao abrir** (desligável em Ajustes) e em
+**Ajustes → Verificar atualizações do app**. Aparece um aviso no topo do Início: "Atualizar"
+baixa o APK da arquitetura do aparelho, confere o SHA-256 e abre o instalador do Android.
+Na primeira vez o Android pede para permitir "instalar apps desta fonte" para o Universal Media Tools.
 
 ### Assinatura
 

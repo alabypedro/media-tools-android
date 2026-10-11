@@ -52,9 +52,10 @@ import com.alabypedro.mediatools.engine.EngineState
 import com.alabypedro.mediatools.engine.MediaInfo
 import com.alabypedro.mediatools.engine.Mode
 import com.alabypedro.mediatools.engine.Selection
+import com.alabypedro.mediatools.update.AppUpdater
 
 @Composable
-fun HomeScreen(vm: HomeViewModel, onQueued: () -> Unit) {
+fun HomeScreen(vm: HomeViewModel, updater: AppUpdater, onQueued: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val engine by vm.engineState.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
@@ -66,6 +67,7 @@ fun HomeScreen(vm: HomeViewModel, onQueued: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        UpdateBanner(updater)
         OutlinedTextField(
             value = state.url,
             onValueChange = vm::setUrl,

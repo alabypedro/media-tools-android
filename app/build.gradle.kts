@@ -21,8 +21,11 @@ android {
         applicationId = "com.alabypedro.mediatools"
         minSdk = 29 // Android 10: salvar em Downloads pelo MediaStore sem permissão de armazenamento
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
+
+        // Repositório onde o release.py publica as versões e o app procura atualizações
+        buildConfigField("String", "UPDATE_REPO", "\"alabypedro/media-tools-android\"")
     }
 
     // Um APK por arquitetura: o Python + FFmpeg embutidos pesam ~40 MB por ABI.

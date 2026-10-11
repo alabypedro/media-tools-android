@@ -28,12 +28,14 @@ import com.alabypedro.mediatools.BuildConfig
 import com.alabypedro.mediatools.UmtApp
 import com.alabypedro.mediatools.download.MediaStoreSaver
 import com.alabypedro.mediatools.engine.EngineState
+import com.alabypedro.mediatools.update.UpdateState
 import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(app: UmtApp) {
     val settings by app.settings.state.collectAsStateWithLifecycle()
     val engine by app.engine.state.collectAsStateWithLifecycle()
+    val updateState by app.updater.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var version by remember { mutableStateOf(app.engine.version) }
@@ -94,6 +96,28 @@ fun SettingsScreen(app: UmtApp) {
                 }
             },
         ) { Text("Atualizar yt-dlp agora") }
+
+        HorizontalDivider()
+
+        Text("Aplicativo", style = MaterialTheme.typography.titleSmall)
+        Text("Versão instalada: ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Procurar versão nova ao abrir", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Switch(settings.checkAppUpdates, onCheckedChange = { v -> app.settings.update { it.copy(checkAppUpdates = v) } })
+        }
+        UpdateBanner(app.updater)
+        OutlinedButton(
+            enabled = updateState !is UpdateState.Checking && updateState !is UpdateState.Downloading,
+            onClick = {
+                scope.launch {
+                    when (val r = app.updater.check()) {
+                        UpdateState.UpToDate -> Toast.makeText(context, "Você já tem a versão mais recente.", Toast.LENGTH_SHORT).show()
+                        is UpdateState.Failed -> Toast.makeText(context, r.message, Toast.LENGTH_LONG).show()
+                        else -> Unit // o aviso acima mostra a versão nova
+                    }
+                }
+            },
+        ) { Text(if (updateState is UpdateState.Checking) "Verificando..." else "Verificar atualizações do app") }
 
         HorizontalDivider()
 
