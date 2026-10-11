@@ -133,6 +133,24 @@ keyPassword=...
 assinado pela mesma chave: se a chave se perder, será preciso desinstalar e instalar de novo
 (perdendo o histórico).
 
+### Ver o app no VS Code (extensão MobileView)
+
+O app é nativo, então não há "versão web": `tools/mobileview.py` liga o emulador **sem janela**,
+instala o APK de debug, abre o app e espelha a tela em **http://localhost:3000**, repassando
+toques, arrastos, rolagem do mouse e teclado pelo adb.
+
+```bash
+python tools/mobileview.py            # usa o APK de debug já compilado
+python tools/mobileview.py --build    # compila antes (depois de mudar o código)
+python tools/mobileview.py --no-install --port 4000
+```
+
+No MobileView: **Use Pixel 1** (ou outro) e cole `http://localhost:3000`. Barra inferior:
+◀ voltar (ou Esc), ● início, ■ recentes, ⟳ reabrir o app. Atualiza ~2-3 quadros/s (captura pelo
+adb) e só enquanto a página está aberta. Digitação: só caracteres ASCII (limitação do
+`adb shell input text`; para acentos use o teclado na tela). Ctrl+C encerra o servidor; o
+emulador continua ligado (`adb emu kill` para desligar).
+
 ### Emulador
 
 ```bash
