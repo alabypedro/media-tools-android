@@ -46,20 +46,18 @@ originais nunca alterados.
 - **Imagem** (jpg, png, bmp, gif, webp, tiff, ico, avif, heic/heif) → outra imagem ou PDF.
   Aplica a rotação da câmera, mantém EXIF (data, câmera, GPS) quando possível e **GIF/WEBP
   animado continua animado**.
-- **PDF** → imagens por página (páginas, DPI, qualidade), **PDF achatado** (formulários e
+- **PDF** → imagens (todas as páginas, 200 DPI), **PDF achatado** (formulários e
   anotações viram conteúdo fixo) ou texto (TXT/DOCX/ODT/RTF).
 - **Texto/Markdown** → PDF (fonte, tamanho, margem).
 - **Documentos e planilhas** sem LibreOffice: DOCX, ODT, RTF, TXT, Markdown, PPTX, ODP, XLSX,
   ODS e CSV ↔ DOCX, ODT, RTF, TXT, PDF, XLSX, ODS, CSV, preservando texto, títulos, listas e tabelas.
 - **Compactados** (zip, 7z, tar, tar.gz/tgz, tar.bz2/tbz2, tar.xz/txz) entre si, com proteção
   contra "zip slip".
-- **Juntar imagens em um PDF**: ordem das páginas, A4/Carta/A3/tamanho da imagem, retrato/paisagem,
-  caber/preencher/esticar, margem.
 - **Salvar em**: `Download/Universal Media Tools/Convertidos` ou qualquer pasta escolhida.
 - Converter / **Pausar** (termina o atual) / **Cancelar**, progresso, notificação ao terminar,
   continua com a tela desligada.
 - Menu ⋮: Formatos suportados, Histórico de conversões, Configurações de conversão.
-  "Opções avançadas": páginas e DPI (PDF → imagem), qualidade, fonte/tamanho/margem (→ PDF) e
+  "Opções avançadas": qualidade, fonte/tamanho/margem (→ PDF) e
   o que fazer quando o arquivo de saída já existe (criar cópia, substituir, pular).
 
 Requer **Android 10 ou mais novo**.
@@ -178,11 +176,11 @@ app/src/main/java/com/alabypedro/mediatools/
 ├── convert/
 │   ├── Formats.kt            categorias e regras origem → destino (porta do registry.py do desktop)
 │   ├── Converters.kt         escolhe e executa o conversor de um arquivo
-│   ├── ConvertRepository.kt  fila, pausar/cancelar, histórico, configurações, "juntar imagens"
+│   ├── ConvertRepository.kt  fila, pausar/cancelar, histórico, configurações
 │   ├── MediaConverter.kt     vídeo/áudio (FFmpeg; tenta -c copy antes de recodificar)
 │   ├── ImageConverter.kt     imagens (ImageDecoder + FFmpeg + HeifWriter), EXIF, animação
 │   ├── PdfConverters.kt      PDF → imagens (PdfRenderer), achatar e extrair texto (PdfBox-Android)
-│   ├── TextPdf.kt            texto/Markdown/documentos → PDF; juntar imagens em PDF
+│   ├── TextPdf.kt            texto/Markdown/documentos → PDF
 │   ├── Office.kt             DOCX/ODT/RTF/XLSX/ODS/CSV/PPTX/ODP lidos e escritos pelo app
 │   ├── ArchiveConverter.kt   zip/7z/tar.* (commons-compress)
 │   ├── FFmpegRunner.kt       roda o libffmpeg.so da youtubedl-android, com progresso e cancelamento

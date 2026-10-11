@@ -38,9 +38,6 @@ data class ConvertEntry(
     val size: Long,
     /** Subpasta de origem (ao adicionar uma pasta), recriada no destino se "manter subpastas". */
     val subfolder: String = "",
-    /** Juntar imagens: as imagens de origem, em ordem ([uri] fica vazio). */
-    val mergeSources: List<String> = emptyList(),
-    val mergeOptions: MergeOptions? = null,
     val status: ConvStatus = ConvStatus.WAITING,
     val progress: Float = -1f,
     val target: String? = null,
@@ -48,7 +45,6 @@ data class ConvertEntry(
     val outputs: List<SavedFile> = emptyList(),
 ) {
     val ext get() = Formats.extensionOf(name)
-    val isMerge get() = mergeSources.isNotEmpty()
 }
 
 data class HistoryItem(val time: Long, val source: String, val target: String, val ok: Boolean, val message: String, val outputs: List<String>)
@@ -141,27 +137,19 @@ class ConvertRepository(private val context: Context, private val engine: Engine
 
     /** Destinos em comum aos arquivos que ainda vão ser convertidos. */
     fun availableTargets(): List<String> {
-        val pending = _state.value.entries.filter { it.status == ConvStatus.WAITING && !it.isMerge }
-            .ifEmpty { _state.value.entries.filter { !it.isMerge } }
+        val pending = _state.value.entries.filter { it.status == ConvStatus.WAITING }
+            .ifEmpty { _state.value.entries }
         return Formats.commonTargets(pending.map { it.ext }.toSet())
-    }
-
-    /** "Juntar imagens em um PDF": entra na fila como um item só. */
-    fun enqueueMerge(images: List<Uri>, fileName: String, options: MergeOptions) {
-        val name = fileName.trim().ifEmpty { "imagens" }.removeSuffix(".pdf") + ".pdf"
-        appendEntries(listOf(ConvertEntry(uri = "merge:" + UUID.randomUUID(), name = name, size = 0,
-            mergeSources = images.map { it.toString() }, mergeOptions = options, target = "pdf")))
-        start(null)
     }
 
     // ------------------------------------------------------------ execução
 
-    /** Converte os itens aguardando para [target] (itens de "juntar imagens" ignoram o alvo). */
+    /** Converte os itens aguardando para [target]. */
     fun start(target: String?) {
         if (target != null) updateSettings { it.copy(lastTarget = target) }
         _state.update { s ->
             s.copy(entries = s.entries.map { e ->
-                if (e.status == ConvStatus.WAITING && !e.isMerge) e.copy(target = target) else e
+                if (e.status == ConvStatus.WAITING) e.copy(target = target) else e
             })
         }
         if (worker?.isActive == true) return
@@ -210,7 +198,7 @@ class ConvertRepository(private val context: Context, private val engine: Engine
         var message: String
         var outputs = emptyList<SavedFile>()
         try {
-            val produced = if (entry.isMerge) runMerge(entry, work) else runOne(entry, target, options, work)
+            val produced = runOne(entry, target, options, work)
             edit(entry.id) { it.copy(progress = -1f, message = "Salvando...") }
             outputs = produced.mapNotNull { sink.save(it, tree, sub, options.conflict) }
             if (outputs.isEmpty()) {
@@ -250,21 +238,6 @@ class ConvertRepository(private val context: Context, private val engine: Engine
         return Converters.run(context, ffmpeg, input, target, options, work, { cancelRequested }) { p ->
             edit(entry.id) { it.copy(progress = p, message = null) }
         }
-    }
-
-    private suspend fun runMerge(entry: ConvertEntry, work: File): List<File> {
-        awaitFfmpeg()
-        val inDir = File(work, "in").apply { mkdirs() }
-        val images = entry.mergeSources.mapIndexed { i, s ->
-            val uri = Uri.parse(s)
-            val (name, size) = queryNameSize(uri)
-            copyIn(uri, "%03d_%s".format(i, name), size, inDir)
-        }
-        val output = File(work, "out/${entry.name}")
-        ImagesToPdf.merge(ffmpeg, images, output, entry.mergeOptions ?: MergeOptions(), work) { p ->
-            edit(entry.id) { it.copy(progress = p, message = null) }
-        }
-        return listOf(output)
     }
 
     /** O FFmpeg é extraído junto com o yt-dlp na abertura do app. */
@@ -321,7 +294,7 @@ class ConvertRepository(private val context: Context, private val engine: Engine
         _settings.value = next
         val o = next.options
         prefs.edit {
-            putString("pages", o.pages); putInt("dpi", o.dpi); putInt("quality", o.quality)
+            putInt("quality", o.quality)
             putBoolean("keepMetadata", o.keepMetadata); putString("font", o.font.name); putInt("fontSize", o.fontSize)
             putFloat("marginMm", o.marginMm); putString("conflict", o.conflict.name); putBoolean("preserveFolders", o.preserveFolders)
             putString("treeUri", next.treeUri); putString("treeLabel", next.treeLabel); putString("lastTarget", next.lastTarget)
@@ -344,8 +317,6 @@ class ConvertRepository(private val context: Context, private val engine: Engine
         val d = ConvertOptions()
         return ConverterSettings(
             options = ConvertOptions(
-                pages = "", // páginas valem só para a fila atual
-                dpi = prefs.getInt("dpi", d.dpi),
                 quality = prefs.getInt("quality", d.quality),
                 keepMetadata = prefs.getBoolean("keepMetadata", d.keepMetadata),
                 font = runCatching { PdfFont.valueOf(prefs.getString("font", null)!!) }.getOrDefault(d.font),

@@ -150,18 +150,4 @@ class ConvertersDeviceTest {
         assertEquals(listOf(listOf("Mês", "Total"), listOf("Janeiro", "1500.5")),
             (Office.read(File(samples, "planilha.xlsx")).single() as Block.Table).rows)
     }
-
-    @Test
-    fun mergeImagesIntoPdf() {
-        val work = File(context.cacheDir, "test-merge").apply { deleteRecursively(); mkdirs() }
-        val out = File(work, "junto.pdf")
-        ImagesToPdf.merge(ffmpeg, listOf("foto.jpg", "logo.png", "anim.gif").map { File(samples, it) }, out,
-            MergeOptions(PageSize.A4, landscape = true, fit = FitMode.CONTAIN), work) {}
-        ParcelFileDescriptor.open(out, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
-            PdfRenderer(pfd).use { r ->
-                assertEquals(3, r.pageCount)
-                r.openPage(0).use { assertTrue("paisagem", it.width > it.height) }
-            }
-        }
-    }
 }

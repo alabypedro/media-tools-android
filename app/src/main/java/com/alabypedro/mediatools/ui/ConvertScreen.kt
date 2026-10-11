@@ -23,15 +23,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,7 +53,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -68,7 +63,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,11 +70,8 @@ import com.alabypedro.mediatools.convert.ConflictPolicy
 import com.alabypedro.mediatools.convert.ConvStatus
 import com.alabypedro.mediatools.convert.ConvertEntry
 import com.alabypedro.mediatools.convert.ConvertRepository
-import com.alabypedro.mediatools.convert.FitMode
 import com.alabypedro.mediatools.convert.Formats
-import com.alabypedro.mediatools.convert.MergeOptions
 import com.alabypedro.mediatools.convert.OutputSink
-import com.alabypedro.mediatools.convert.PageSize
 import com.alabypedro.mediatools.convert.PdfFont
 import com.alabypedro.mediatools.download.MediaStoreSaver
 import kotlinx.coroutines.Dispatchers
@@ -96,7 +87,6 @@ fun ConvertScreen(repo: ConvertRepository) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<String?>(null) }
-    var mergeImages by remember { mutableStateOf<List<Uri>?>(null) }
 
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -110,9 +100,6 @@ fun ConvertScreen(repo: ConvertRepository) {
         val n = repo.addTree(uri)
         Toast.makeText(context, if (n == 0) "Nenhum arquivo convertível nessa pasta." else "$n arquivo(s) adicionados.", Toast.LENGTH_SHORT).show()
     }
-    val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) { uris.forEach { keepReadPermission(context, it) }; mergeImages = uris }
-    }
     val pickOutput = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) repo.setTree(uri)
     }
@@ -122,7 +109,7 @@ fun ConvertScreen(repo: ConvertRepository) {
     val chosen = target?.takeIf { it in targets }
         ?: settings.lastTarget?.takeIf { it in targets }
         ?: targets.firstOrNull()
-    val waiting = state.entries.count { it.status == ConvStatus.WAITING && !it.isMerge }
+    val waiting = state.entries.count { it.status == ConvStatus.WAITING }
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -145,7 +132,6 @@ fun ConvertScreen(repo: ConvertRepository) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { pickFiles.launch(arrayOf("*/*")) }) { Text("Adicionar arquivos") }
                 OutlinedButton(onClick = { pickFolder.launch(null) }) { Text("Adicionar pasta") }
-                OutlinedButton(onClick = { pickImages.launch(arrayOf("image/*")) }) { Text("Juntar imagens em um PDF") }
             }
         }
 
@@ -175,7 +161,7 @@ fun ConvertScreen(repo: ConvertRepository) {
 
         item { HorizontalDivider() }
         item { TargetPicker(targets, chosen, enabled = !state.running) { target = it } }
-        if (state.entries.any { !it.isMerge } && targets.isEmpty()) {
+        if (state.entries.isNotEmpty() && targets.isEmpty()) {
             item {
                 Text("Os arquivos da fila não têm um formato de saída em comum. Converta tipos diferentes separadamente.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -231,12 +217,6 @@ fun ConvertScreen(repo: ConvertRepository) {
         "settings" -> SettingsDialog(repo) { dialog = null }
         "advanced" -> AdvancedDialog(repo) { dialog = null }
     }
-    mergeImages?.let { uris ->
-        MergeDialog(context, uris, onDismiss = { mergeImages = null }) { ordered, name, options ->
-            mergeImages = null
-            repo.enqueueMerge(ordered, name, options)
-        }
-    }
 }
 
 /** Mantém o acesso ao arquivo escolhido até a conversão (a fila pode rodar depois). */
@@ -253,15 +233,14 @@ private fun EntryCard(entry: ConvertEntry, chosen: String?, onRemove: () -> Unit
                 Thumbnail(entry)
                 Column(Modifier.weight(1f)) {
                     Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    val type = if (entry.isMerge) "${entry.mergeSources.size} imagens → PDF"
-                    else listOfNotNull(
+                    val type = listOfNotNull(
                         Formats.categoryOf(entry.ext)?.label,
                         humanSize(entry.size),
                         entry.subfolder.takeIf { it.isNotEmpty() }?.let { "$it/" },
                     ).joinToString(" · ")
                     Text(type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val dest = entry.target ?: chosen
-                    if (entry.status == ConvStatus.WAITING && dest != null && !entry.isMerge) {
+                    if (entry.status == ConvStatus.WAITING && dest != null) {
                         Text("→ ${destinationName(entry.name, dest)}", style = MaterialTheme.typography.bodySmall,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -305,7 +284,7 @@ private fun destinationName(name: String, target: String): String {
 @Composable
 private fun Thumbnail(entry: ConvertEntry) {
     val context = LocalContext.current
-    val uri = if (entry.isMerge) entry.mergeSources.first() else entry.uri
+    val uri = entry.uri
     var bitmap by remember(uri) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(uri) {
         bitmap = withContext(Dispatchers.IO) {
@@ -318,7 +297,7 @@ private fun Thumbnail(entry: ConvertEntry) {
             modifier = Modifier.size(56.dp).clip(shape))
     } else {
         Box(Modifier.size(56.dp).clip(shape).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
-            Text(if (entry.isMerge) "PDF" else entry.ext.uppercase().take(4), style = MaterialTheme.typography.labelMedium,
+            Text(entry.ext.uppercase().take(4), style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
     }
@@ -382,14 +361,12 @@ private fun HistoryDialog(repo: ConvertRepository, onDismiss: () -> Unit) {
     )
 }
 
-/** "Opções avançadas" (desktop): PDF → imagem, qualidade, Texto → PDF e conflito de nomes. */
+/** "Opções avançadas": qualidade, Texto → PDF e conflito de nomes. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AdvancedDialog(repo: ConvertRepository, onDismiss: () -> Unit) {
     val settings by repo.settings.collectAsStateWithLifecycle()
     val current = remember { settings.options }
-    var pages by remember { mutableStateOf(current.pages) }
-    var dpi by remember { mutableStateOf(current.dpi.toString()) }
     var quality by remember { mutableFloatStateOf(current.quality.toFloat()) }
     var font by remember { mutableStateOf(current.font) }
     var fontSize by remember { mutableFloatStateOf(current.fontSize.toFloat()) }
@@ -400,11 +377,6 @@ private fun AdvancedDialog(repo: ConvertRepository, onDismiss: () -> Unit) {
         title = { Text("Opções avançadas") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("PDF → imagem", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(pages, { pages = it }, label = { Text("Páginas") }, placeholder = { Text("todas (ex.: 1-5,10)") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(dpi, { dpi = it.filter(Char::isDigit).take(4) }, label = { Text("Resolução (DPI)") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
                 Text("Imagens e PDF", style = MaterialTheme.typography.titleSmall)
                 Text("Qualidade: ${quality.toInt()} (JPG, WEBP, AVIF, HEIC e PDF → imagem)", style = MaterialTheme.typography.bodySmall)
                 Slider(quality, { quality = it }, valueRange = 1f..100f)
@@ -426,7 +398,7 @@ private fun AdvancedDialog(repo: ConvertRepository, onDismiss: () -> Unit) {
             TextButton(onClick = {
                 repo.updateSettings { s ->
                     s.copy(options = s.options.copy(
-                        pages = pages.trim(), dpi = (dpi.toIntOrNull() ?: 200).coerceIn(36, 1200), quality = quality.toInt(),
+                        quality = quality.toInt(),
                         font = font, fontSize = fontSize.toInt(), marginMm = margin, conflict = conflict,
                     ))
                 }
@@ -468,69 +440,4 @@ private fun SwitchRow(text: String, checked: Boolean, onChange: (Boolean) -> Uni
         Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Switch(checked, onChange)
     }
-}
-
-/** "Juntar imagens em um PDF": ordem das páginas, tamanho, orientação, ajuste e margem. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun MergeDialog(context: Context, initial: List<Uri>, onDismiss: () -> Unit, onConfirm: (List<Uri>, String, MergeOptions) -> Unit) {
-    val images = remember { mutableStateListOf<Uri>().apply { addAll(initial) } }
-    var name by remember { mutableStateOf("imagens") }
-    var pageSize by remember { mutableStateOf(PageSize.A4) }
-    var landscape by remember { mutableStateOf(false) }
-    var fit by remember { mutableStateOf(FitMode.CONTAIN) }
-    var margin by remember { mutableFloatStateOf(10f) }
-    val names = remember(initial) {
-        initial.associateWith { uri ->
-            runCatching {
-                context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-                    ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-            }.getOrNull() ?: uri.lastPathSegment.orEmpty()
-        }
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Juntar imagens em um PDF") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Uma página por imagem, nesta ordem:", style = MaterialTheme.typography.bodySmall)
-                Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
-                    images.forEachIndexed { i, uri ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${i + 1}. ${names[uri]}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            IconButton(onClick = { if (i > 0) images.add(i - 1, images.removeAt(i)) }, enabled = i > 0,
-                                modifier = Modifier.size(32.dp)) { Icon(Icons.Default.KeyboardArrowUp, "Subir") }
-                            IconButton(onClick = { if (i < images.lastIndex) images.add(i + 1, images.removeAt(i)) }, enabled = i < images.lastIndex,
-                                modifier = Modifier.size(32.dp)) { Icon(Icons.Default.KeyboardArrowDown, "Descer") }
-                            IconButton(onClick = { images.removeAt(i) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, "Tirar") }
-                        }
-                    }
-                }
-                OutlinedTextField(name, { name = it }, label = { Text("Nome do PDF") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("Tamanho da página", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PageSize.entries.forEach { p -> FilterChip(pageSize == p, { pageSize = p }, label = { Text(p.label) }) }
-                }
-                if (pageSize != PageSize.ORIGINAL) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(!landscape, { landscape = false }, label = { Text("Retrato") })
-                        FilterChip(landscape, { landscape = true }, label = { Text("Paisagem") })
-                    }
-                    Text("Ajuste da imagem", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FitMode.entries.forEach { f -> FilterChip(fit == f, { fit = f }, label = { Text(f.label) }) }
-                    }
-                    Text("Margem: ${margin.toInt()} mm", style = MaterialTheme.typography.bodySmall)
-                    Slider(margin, { margin = it }, valueRange = 0f..40f)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = images.isNotEmpty(), onClick = {
-                onConfirm(images.toList(), name, MergeOptions(pageSize, landscape, fit, margin))
-            }) { Text("Gerar PDF") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
-    )
 }

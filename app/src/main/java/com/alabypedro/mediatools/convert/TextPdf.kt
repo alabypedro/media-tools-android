@@ -1,9 +1,7 @@
 package com.alabypedro.mediatools.convert
 
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.text.Html
@@ -91,70 +89,5 @@ object TextPdf {
         } finally {
             doc.close()
         }
-    }
-}
-
-enum class PageSize(val label: String, val mm: Pair<Float, Float>?) {
-    A4("A4", 210f to 297f), LETTER("Carta", 215.9f to 279.4f), A3("A3", 297f to 420f), ORIGINAL("Tamanho da imagem", null)
-}
-
-enum class FitMode(val label: String) { CONTAIN("Caber inteira"), COVER("Preencher (corta)"), STRETCH("Esticar") }
-
-data class MergeOptions(
-    val pageSize: PageSize = PageSize.A4,
-    val landscape: Boolean = false,
-    val fit: FitMode = FitMode.CONTAIN,
-    val marginMm: Float = 10f,
-)
-
-/** Várias imagens → um PDF, uma página por imagem (desktop: image_to_pdf.py). */
-object ImagesToPdf {
-    fun merge(ffmpeg: FFmpegRunner, images: List<File>, output: File, options: MergeOptions, work: File, onProgress: (Float) -> Unit) {
-        if (images.isEmpty()) throw ConversionException("Nenhuma imagem selecionada para gerar o PDF.")
-        val doc = PdfDocument()
-        try {
-            images.forEachIndexed { i, file ->
-                val bmp = ImageConverter.decode(ffmpeg, file, work)
-                val (pw, ph) = pageSize(options, bmp)
-                val page = doc.startPage(PdfDocument.PageInfo.Builder(pw, ph, i + 1).create())
-                val m = if (options.pageSize == PageSize.ORIGINAL) 0f else options.marginMm * 72f / 25.4f
-                val box = RectF(m, m, pw - m, ph - m)
-                val canvas = page.canvas
-                canvas.save()
-                canvas.clipRect(box)
-                val dest = target(bmp, box, options.fit)
-                // o PDF guarda a imagem sem perdas: acima de ~200 DPI na página só aumenta o arquivo
-                val maxW = (dest.width() * 200 / 72).toInt().coerceAtLeast(1)
-                val draw = if (options.pageSize != PageSize.ORIGINAL && bmp.width > maxW) {
-                    Bitmap.createScaledBitmap(bmp, maxW, (bmp.height.toLong() * maxW / bmp.width).toInt().coerceAtLeast(1), true)
-                } else bmp
-                canvas.drawBitmap(draw, null, dest, Paint(Paint.FILTER_BITMAP_FLAG))
-                canvas.restore()
-                doc.finishPage(page)
-                if (draw !== bmp) draw.recycle()
-                bmp.recycle()
-                onProgress((i + 1f) / images.size)
-            }
-            output.parentFile?.mkdirs()
-            output.outputStream().buffered().use { doc.writeTo(it) }
-        } finally {
-            doc.close()
-        }
-    }
-
-    private fun pageSize(o: MergeOptions, bmp: Bitmap): Pair<Int, Int> {
-        val mm = o.pageSize.mm ?: return bmp.width to bmp.height
-        val w = (mm.first * 72 / 25.4f).toInt()
-        val h = (mm.second * 72 / 25.4f).toInt()
-        return if (o.landscape) h to w else w to h
-    }
-
-    private fun target(bmp: Bitmap, box: RectF, fit: FitMode): RectF {
-        if (fit == FitMode.STRETCH) return box
-        val scale = if (fit == FitMode.CONTAIN) minOf(box.width() / bmp.width, box.height() / bmp.height)
-        else maxOf(box.width() / bmp.width, box.height() / bmp.height)
-        val w = bmp.width * scale
-        val h = bmp.height * scale
-        return RectF(box.centerX() - w / 2, box.centerY() - h / 2, box.centerX() + w / 2, box.centerY() + h / 2)
     }
 }
