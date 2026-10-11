@@ -21,8 +21,8 @@ android {
         applicationId = "com.alabypedro.mediatools"
         minSdk = 29 // Android 10: salvar em Downloads pelo MediaStore sem permissão de armazenamento
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Repositório onde o release.py publica as versões e o app procura atualizações
